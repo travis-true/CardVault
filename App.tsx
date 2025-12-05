@@ -4,7 +4,7 @@ import { Plus, LayoutGrid, Search, TrendingUp, Layers, Filter } from 'lucide-rea
 import { CardFormModal } from './components/CardFormModal';
 import { StatsChart } from './components/StatsChart';
 import { getCards, saveCard, getPortfolioValue, getSportDistribution, deleteCard } from './services/storageService';
-import { Card, SortOption } from './types';
+import { Card, SortOption, CardStatus } from './types';
 
 // Helper for nav links
 const NavLink = ({ to, icon: Icon, label }: { to: string; icon: any; label: string }) => {
@@ -55,7 +55,7 @@ const Dashboard = ({ cards, portfolioValue, sportData }: { cards: Card[], portfo
              <h3 className="text-slate-400 text-sm font-medium uppercase tracking-wider mb-2">Latest Add</h3>
              {cards.length > 0 ? (
                 <div>
-                   <p className="text-xl font-bold text-white truncate">{cards[0].player}</p>
+                   <p className="text-xl font-bold text-white truncate">{cards[0].first_name} {cards[0].last_name}</p>
                    <p className="text-slate-400 text-sm">{cards[0].year} {cards[0].brand}</p>
                 </div>
              ) : (
@@ -70,15 +70,15 @@ const Dashboard = ({ cards, portfolioValue, sportData }: { cards: Card[], portfo
              <div className="space-y-4">
                {cards.slice(0, 5).map(card => (
                  <div key={card.id} className="flex items-center gap-4 p-3 hover:bg-slate-800 rounded-lg transition-colors group">
-                    <img src={card.image_url} alt={card.player} className="w-12 h-16 object-cover rounded bg-slate-900" />
+                    <img src={card.image_url} alt={`${card.first_name} ${card.last_name}`} className="w-12 h-16 object-cover rounded bg-slate-900" />
                     <div className="flex-1 min-w-0">
-                       <h4 className="text-white font-medium truncate">{card.player}</h4>
+                       <h4 className="text-white font-medium truncate">{card.first_name} {card.last_name}</h4>
                        <p className="text-sm text-slate-400 truncate">{card.year} {card.brand} #{card.card_number}</p>
                     </div>
                     <div className="text-right">
                        <p className="text-white font-medium">${card.estimated_value}</p>
                        <span className="text-xs text-slate-500 bg-slate-900 px-2 py-0.5 rounded border border-slate-700">
-                        {card.grading_company === 'Raw' ? 'RAW' : `${card.grading_company} ${card.grade}`}
+                        {card.status === CardStatus.Raw ? (card.condition || 'RAW') : `${card.grading_company} ${card.grade}`}
                        </span>
                     </div>
                  </div>
@@ -107,7 +107,8 @@ const Inventory = ({ cards, onDelete }: { cards: Card[], onDelete: (id: string) 
     if (search) {
       const q = search.toLowerCase();
       result = result.filter(c => 
-        c.player.toLowerCase().includes(q) || 
+        c.first_name.toLowerCase().includes(q) || 
+        c.last_name.toLowerCase().includes(q) ||
         c.team.toLowerCase().includes(q) ||
         c.brand.toLowerCase().includes(q)
       );
@@ -175,7 +176,7 @@ const Inventory = ({ cards, onDelete }: { cards: Card[], onDelete: (id: string) 
         {filteredCards.map(card => (
           <div key={card.id} className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden hover:border-emerald-500/50 transition-all group flex flex-col">
             <div className="relative aspect-[3/4] bg-slate-900 overflow-hidden">
-              <img src={card.image_url} alt={card.player} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+              <img src={card.image_url} alt={`${card.first_name} ${card.last_name}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
               <div className="absolute top-2 right-2">
                  <span className={`text-xs font-bold px-2 py-1 rounded shadow-lg backdrop-blur-md ${card.estimated_value > 100 ? 'bg-amber-500/90 text-black' : 'bg-slate-900/80 text-white border border-slate-700'}`}>
                    ${card.estimated_value}
@@ -184,13 +185,13 @@ const Inventory = ({ cards, onDelete }: { cards: Card[], onDelete: (id: string) 
             </div>
             <div className="p-4 flex-1 flex flex-col">
                <div className="flex justify-between items-start mb-1">
-                 <h3 className="font-bold text-white text-lg leading-tight line-clamp-1">{card.player}</h3>
+                 <h3 className="font-bold text-white text-lg leading-tight line-clamp-1">{card.first_name} {card.last_name}</h3>
                </div>
                <p className="text-slate-400 text-sm mb-3">{card.year} {card.brand} #{card.card_number}</p>
                
                <div className="mt-auto pt-3 border-t border-slate-700 flex justify-between items-center">
                   <span className="text-xs font-medium text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20">
-                    {card.grading_company === 'Raw' ? 'RAW' : `${card.grading_company} ${card.grade}`}
+                    {card.status === CardStatus.Raw ? (card.condition || 'RAW') : `${card.grading_company} ${card.grade}`}
                   </span>
                   <button 
                     onClick={() => onDelete(card.id)}

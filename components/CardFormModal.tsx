@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, Sparkles, Loader2, Camera } from 'lucide-react';
-import { Sport, GradingCompany, Card } from '../types';
-import { analyzeCardImage } from '../services/geminiService';
+import { X, Upload, Sparkles, Loader2, Camera, Search } from 'lucide-react';
+import { Sport, Card, CardStatus, GradingCompany, RawCondition } from '../types';
+import { analyzeCardImage, lookupCardInfo } from '../services/geminiService';
 import { v4 as uuidv4 } from 'uuid';
 
 interface CardFormModalProps {
@@ -12,34 +12,45 @@ interface CardFormModalProps {
 
 export const CardFormModal: React.FC<CardFormModalProps> = ({ isOpen, onClose, onSave }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isLookingUp, setIsLookingUp] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState<Partial<Card>>({
-    player: '',
+    first_name: '',
+    last_name: '',
     year: '',
     brand: '',
     card_number: '',
     sport: Sport.Baseball,
     team: '',
-    grading_company: GradingCompany.Raw,
+    status: CardStatus.Raw,
+    grading_company: GradingCompany.PSA,
     grade: '',
+    condition: RawCondition.NearMint,
     estimated_value: 0,
     notes: '',
   });
 
-  // Reset form when modal opens/closes
+  // Reset form when modal opens
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+       // Only reset if opening (clean state)
+       // Note: In a real app we might pass an existing card to edit, preventing this reset.
+       // For now, this is "Add New" only.
+    } else {
         setFormData({
-            player: '',
+            first_name: '',
+            last_name: '',
             year: '',
             brand: '',
             card_number: '',
             sport: Sport.Baseball,
             team: '',
-            grading_company: GradingCompany.Raw,
+            status: CardStatus.Raw,
+            grading_company: GradingCompany.PSA,
             grade: '',
+            condition: RawCondition.NearMint,
             estimated_value: 0,
             notes: '',
         });
@@ -51,19 +62,18 @@ export const CardFormModal: React.FC<CardFormModalProps> = ({ isOpen, onClose, o
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Convert to Base64
     const reader = new FileReader();
     reader.onloadend = async () => {
       const base64String = reader.result as string;
       setPreview(base64String);
       
-      // Auto-analyze
       setIsAnalyzing(true);
       try {
         const analysis = await analyzeCardImage(base64String);
         setFormData(prev => ({
           ...prev,
-          player: analysis.player,
+          first_name: analysis.first_name,
+          last_name: analysis.last_name,
           year: analysis.year,
           brand: analysis.brand,
           card_number: analysis.card_number,
@@ -73,12 +83,34 @@ export const CardFormModal: React.FC<CardFormModalProps> = ({ isOpen, onClose, o
         }));
       } catch (err) {
         console.error("Failed to analyze", err);
-        // We allow the user to continue manually if AI fails
       } finally {
         setIsAnalyzing(false);
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleTextLookup = async () => {
+    if (!formData.year || !formData.brand || !formData.card_number) {
+        alert("Please enter Year, Brand, and Card # first.");
+        return;
+    }
+    
+    setIsLookingUp(true);
+    try {
+        const info = await lookupCardInfo(formData.year, formData.brand, formData.card_number);
+        setFormData(prev => ({
+            ...prev,
+            first_name: info.first_name || prev.first_name,
+            last_name: info.last_name || prev.last_name,
+            team: info.team || prev.team,
+            sport: info.sport ? mapSportString(info.sport) : prev.sport
+        }));
+    } catch (err) {
+        console.error("Lookup failed", err);
+    } finally {
+        setIsLookingUp(false);
+    }
   };
 
   const mapSportString = (str: string): Sport => {
@@ -96,16 +128,22 @@ export const CardFormModal: React.FC<CardFormModalProps> = ({ isOpen, onClose, o
     e.preventDefault();
     const newCard: Card = {
       id: uuidv4(),
-      player: formData.player || 'Unknown Player',
+      first_name: formData.first_name || 'Unknown',
+      last_name: formData.last_name || '',
       year: formData.year || '',
       brand: formData.brand || '',
       card_number: formData.card_number || '',
       sport: formData.sport || Sport.Other,
       team: formData.team || '',
-      grading_company: formData.grading_company || GradingCompany.Raw,
-      grade: formData.grade || '',
+      status: formData.status || CardStatus.Raw,
+      
+      // Logic to clear fields based on status
+      grading_company: formData.status === CardStatus.Graded ? formData.grading_company : undefined,
+      grade: formData.status === CardStatus.Graded ? formData.grade : undefined,
+      condition: formData.status === CardStatus.Raw ? formData.condition : undefined,
+      
       estimated_value: Number(formData.estimated_value) || 0,
-      image_url: preview || 'https://picsum.photos/300/400', // Fallback
+      image_url: preview || 'https://picsum.photos/300/400',
       notes: formData.notes || '',
       date_added: new Date().toISOString()
     };
@@ -168,29 +206,44 @@ export const CardFormModal: React.FC<CardFormModalProps> = ({ isOpen, onClose, o
             {isAnalyzing && (
               <div className="flex items-center gap-3 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg text-indigo-400 animate-pulse">
                 <Sparkles size={18} />
-                <span className="text-sm font-medium">Analyzing with Gemini AI...</span>
+                <span className="text-sm font-medium">Analyzing image...</span>
                 <Loader2 size={16} className="animate-spin ml-auto" />
               </div>
             )}
-            {!isAnalyzing && preview && formData.player && (
-               <div className="flex items-center gap-3 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-400">
-                <Sparkles size={18} />
-                <span className="text-sm font-medium">Details extracted successfully!</span>
+            {isLookingUp && (
+              <div className="flex items-center gap-3 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg text-indigo-400 animate-pulse">
+                <Search size={18} />
+                <span className="text-sm font-medium">Looking up details...</span>
+                <Loader2 size={16} className="animate-spin ml-auto" />
               </div>
             )}
           </div>
 
           {/* Form Section */}
           <form id="cardForm" onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Player / Subject</label>
-              <input 
-                required
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500 transition-colors"
-                value={formData.player}
-                onChange={e => setFormData({...formData, player: e.target.value})}
-                placeholder="e.g. Michael Jordan"
-              />
+            
+            {/* Split Names */}
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">First Name</label>
+                  <input 
+                    required
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                    value={formData.first_name}
+                    onChange={e => setFormData({...formData, first_name: e.target.value})}
+                    placeholder="Michael"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Last Name</label>
+                  <input 
+                    required
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                    value={formData.last_name}
+                    onChange={e => setFormData({...formData, last_name: e.target.value})}
+                    placeholder="Jordan"
+                  />
+                </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -236,6 +289,19 @@ export const CardFormModal: React.FC<CardFormModalProps> = ({ isOpen, onClose, o
                 </div>
             </div>
 
+            {/* AI Auto Fill Button */}
+            {(formData.year && formData.brand && formData.card_number && !formData.first_name) && (
+                 <button
+                    type="button"
+                    onClick={handleTextLookup}
+                    disabled={isLookingUp}
+                    className="w-full py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-lg flex items-center justify-center gap-2 text-sm transition-colors"
+                 >
+                    {isLookingUp ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                    Auto-fill info from details
+                 </button>
+            )}
+
              <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Team</label>
                 <input 
@@ -246,40 +312,68 @@ export const CardFormModal: React.FC<CardFormModalProps> = ({ isOpen, onClose, o
                 />
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-                 <div className="col-span-1">
-                    <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Grader</label>
-                    <select 
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500 transition-colors"
-                        value={formData.grading_company}
-                        onChange={e => setFormData({...formData, grading_company: e.target.value as GradingCompany})}
-                    >
-                        {Object.values(GradingCompany).map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                 </div>
-                 <div className="col-span-1">
-                    <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Grade</label>
-                    <input 
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500 transition-colors"
-                        value={formData.grade}
-                        onChange={e => setFormData({...formData, grade: e.target.value})}
-                        placeholder="10"
-                        disabled={formData.grading_company === GradingCompany.Raw}
-                    />
-                 </div>
-                  <div className="col-span-1">
-                    <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Value ($)</label>
-                    <input 
-                        type="number"
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500 transition-colors"
-                        value={formData.estimated_value}
-                        onChange={e => setFormData({...formData, estimated_value: parseFloat(e.target.value)})}
-                        placeholder="0.00"
-                    />
-                 </div>
+            {/* Grading / Condition Section */}
+            <div className="border-t border-slate-800 pt-4 mt-4">
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Card Status</label>
+                        <select 
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                            value={formData.status}
+                            onChange={e => setFormData({...formData, status: e.target.value as CardStatus})}
+                        >
+                            {Object.values(CardStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                         <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Value ($)</label>
+                         <input 
+                            type="number"
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                            value={formData.estimated_value}
+                            onChange={e => setFormData({...formData, estimated_value: parseFloat(e.target.value)})}
+                            placeholder="0.00"
+                        />
+                    </div>
+                </div>
+
+                {formData.status === CardStatus.Raw ? (
+                    <div>
+                        <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Condition</label>
+                        <select 
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                            value={formData.condition}
+                            onChange={e => setFormData({...formData, condition: e.target.value as RawCondition})}
+                        >
+                            {Object.values(RawCondition).map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Grader</label>
+                            <select 
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                                value={formData.grading_company}
+                                onChange={e => setFormData({...formData, grading_company: e.target.value as GradingCompany})}
+                            >
+                                {Object.values(GradingCompany).map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Grade</label>
+                            <input 
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                                value={formData.grade}
+                                onChange={e => setFormData({...formData, grade: e.target.value})}
+                                placeholder="10"
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
             
-            <div>
+            <div className="pt-2">
                  <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Notes</label>
                  <textarea 
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500 transition-colors h-20 text-sm"

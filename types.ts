@@ -8,24 +8,44 @@ export enum Sport {
   Other = 'Other'
 }
 
-export enum GradingCompany {
+export enum CardStatus {
   Raw = 'Raw',
+  Graded = 'Graded'
+}
+
+export enum GradingCompany {
   PSA = 'PSA',
   BGS = 'BGS',
   SGC = 'SGC',
-  CGC = 'CGC'
+  CGC = 'CGC',
+  TAG = 'TAG'
+}
+
+export enum RawCondition {
+  GemMint = 'Gem Mint',
+  Mint = 'Mint',
+  NearMintMint = 'Near Mint-Mint',
+  NearMint = 'Near Mint',
+  ExcellentMint = 'Excellent-Mint',
+  Excellent = 'Excellent',
+  VeryGood = 'Very Good',
+  Good = 'Good',
+  Poor = 'Poor'
 }
 
 export interface Card {
   id: string;
-  player: string;
+  first_name: string;
+  last_name: string;
   year: string;
   brand: string;
   card_number: string;
   sport: Sport;
   team: string;
-  grading_company: GradingCompany;
-  grade: string; // e.g., "10", "NM-MT 8", or empty if raw
+  status: CardStatus;
+  grading_company?: GradingCompany;
+  grade?: string; // e.g., "10", "9.5"
+  condition?: RawCondition;
   estimated_value: number;
   image_url: string; // Base64 or URL
   notes: string;
@@ -33,7 +53,8 @@ export interface Card {
 }
 
 export interface CardAnalysisResult {
-  player: string;
+  first_name: string;
+  last_name: string;
   year: string;
   brand: string;
   card_number: string;

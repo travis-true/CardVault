@@ -1,0 +1,7 @@
+{
+  "name": "CardVault AI",
+  "description": "A premium sports card inventory management system powered by Gemini AI for automated card identification and valuation tracking.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

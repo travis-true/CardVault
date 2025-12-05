@@ -87,3 +87,74 @@ export const lookupCardInfo = async (year: string, brand: string, cardNumber: st
     throw error;
   }
 };
+
+export const findCardValue = async (details: string): Promise<number> => {
+  try {
+    const prompt = `Find the most recent fair market value (price in USD) for this sports card: ${details}. 
+    Look for recent sold listings on eBay, PWCC, or Goldin. 
+    Return a JSON object with a single key "value" containing the number (average if range). Do not add markdown formatting.`;
+
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+        // responseMimeType and responseSchema are NOT supported with googleSearch
+      }
+    });
+
+    if (response.text) {
+      // Clean potential markdown code blocks
+      const text = response.text.replace(/```json|```/g, '').trim();
+      try {
+          const data = JSON.parse(text);
+          return data.value || 0;
+      } catch (e) {
+          // Fallback simple number extraction
+          const match = text.match(/[\d,]+(\.\d+)?/);
+          if (match) {
+             const val = parseFloat(match[0].replace(/,/g, ''));
+             return isNaN(val) ? 0 : val;
+          }
+          return 0;
+      }
+    }
+    return 0;
+  } catch (error) {
+    console.error("Gemini Value Search Error:", error);
+    return 0;
+  }
+};
+
+export const findCardImage = async (details: string): Promise<string | null> => {
+  try {
+    const prompt = `Find a high-quality image URL for the following sports card: ${details}. 
+    The image should be of the card front.
+    Return a JSON object with a single key "imageUrl" containing the URL. Do not add markdown formatting.`;
+
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+        // responseMimeType and responseSchema are NOT supported with googleSearch
+      }
+    });
+
+    if (response.text) {
+       const text = response.text.replace(/```json|```/g, '').trim();
+       try {
+        const data = JSON.parse(text);
+        return data.imageUrl || null;
+       } catch (e) {
+         // Fallback link extraction
+         const match = text.match(/https?:\/\/[^\s"']+/);
+         return match ? match[0] : null;
+       }
+    }
+    return null;
+  } catch (error) {
+    console.error("Gemini Image Search Error:", error);
+    return null;
+  }
+};

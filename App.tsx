@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Plus, LayoutGrid, Search, TrendingUp, Layers, Filter } from 'lucide-react';
+import { Plus, LayoutGrid, Search, TrendingUp, Layers, Filter, RotateCw } from 'lucide-react';
 import { CardFormModal } from './components/CardFormModal';
 import { StatsChart } from './components/StatsChart';
 import { getCards, saveCard, getPortfolioValue, getSportDistribution, deleteCard } from './services/storageService';
@@ -96,6 +96,64 @@ const Dashboard = ({ cards, portfolioValue, sportData }: { cards: Card[], portfo
   );
 };
 
+// Simple Flip Card Component for Inventory
+const InventoryCard = ({ card, onDelete }: { card: Card; onDelete: (id: string) => void }) => {
+  const [isFlipped, setIsFlipped] = useState(false);
+
+  return (
+      <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden hover:border-emerald-500/50 transition-all group flex flex-col h-full">
+          <div 
+              className="relative aspect-[3/4] bg-slate-900 overflow-hidden cursor-pointer perspective-1000"
+              onClick={() => card.image_url_back && setIsFlipped(!isFlipped)}
+          >
+              <div className={`relative w-full h-full transition-transform duration-500 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`} style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}>
+                  {/* Front */}
+                  <div className="absolute w-full h-full backface-hidden">
+                      <img src={card.image_url} alt="Front" className="w-full h-full object-cover" />
+                      <div className="absolute top-2 right-2">
+                           <span className={`text-xs font-bold px-2 py-1 rounded shadow-lg backdrop-blur-md ${card.estimated_value > 100 ? 'bg-amber-500/90 text-black' : 'bg-slate-900/80 text-white border border-slate-700'}`}>
+                          ${card.estimated_value}
+                          </span>
+                      </div>
+                       {card.image_url_back && (
+                          <div className="absolute bottom-2 right-2 bg-slate-900/50 p-1.5 rounded-full backdrop-blur-sm text-white/70 hover:text-white">
+                              <RotateCw size={14} />
+                          </div>
+                      )}
+                  </div>
+                  {/* Back */}
+                  <div className="absolute w-full h-full backface-hidden rotate-y-180 bg-slate-800 flex items-center justify-center" style={{ transform: 'rotateY(180deg)', backfaceVisibility: 'hidden' }}>
+                      {card.image_url_back ? (
+                          <img src={card.image_url_back} alt="Back" className="w-full h-full object-cover" />
+                      ) : (
+                          <p className="text-slate-500 text-sm">No back image</p>
+                      )}
+                  </div>
+              </div>
+          </div>
+
+          <div className="p-4 flex-1 flex flex-col">
+             <div className="flex justify-between items-start mb-1">
+               <h3 className="font-bold text-white text-lg leading-tight line-clamp-1">{card.first_name} {card.last_name}</h3>
+             </div>
+             <p className="text-slate-400 text-sm mb-3">{card.year} {card.brand} #{card.card_number}</p>
+             
+             <div className="mt-auto pt-3 border-t border-slate-700 flex justify-between items-center">
+                <span className="text-xs font-medium text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20">
+                  {card.status === CardStatus.Raw ? (card.condition || 'RAW') : `${card.grading_company} ${card.grade}`}
+                </span>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); onDelete(card.id); }}
+                  className="text-slate-600 hover:text-red-400 text-xs transition-colors"
+                >
+                  Remove
+                </button>
+             </div>
+          </div>
+        </div>
+  );
+};
+
 const Inventory = ({ cards, onDelete }: { cards: Card[], onDelete: (id: string) => void }) => {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortOption>('date_desc');
@@ -174,34 +232,7 @@ const Inventory = ({ cards, onDelete }: { cards: Card[], onDelete: (id: string) 
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {filteredCards.map(card => (
-          <div key={card.id} className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden hover:border-emerald-500/50 transition-all group flex flex-col">
-            <div className="relative aspect-[3/4] bg-slate-900 overflow-hidden">
-              <img src={card.image_url} alt={`${card.first_name} ${card.last_name}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-              <div className="absolute top-2 right-2">
-                 <span className={`text-xs font-bold px-2 py-1 rounded shadow-lg backdrop-blur-md ${card.estimated_value > 100 ? 'bg-amber-500/90 text-black' : 'bg-slate-900/80 text-white border border-slate-700'}`}>
-                   ${card.estimated_value}
-                 </span>
-              </div>
-            </div>
-            <div className="p-4 flex-1 flex flex-col">
-               <div className="flex justify-between items-start mb-1">
-                 <h3 className="font-bold text-white text-lg leading-tight line-clamp-1">{card.first_name} {card.last_name}</h3>
-               </div>
-               <p className="text-slate-400 text-sm mb-3">{card.year} {card.brand} #{card.card_number}</p>
-               
-               <div className="mt-auto pt-3 border-t border-slate-700 flex justify-between items-center">
-                  <span className="text-xs font-medium text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20">
-                    {card.status === CardStatus.Raw ? (card.condition || 'RAW') : `${card.grading_company} ${card.grade}`}
-                  </span>
-                  <button 
-                    onClick={() => onDelete(card.id)}
-                    className="text-slate-600 hover:text-red-400 text-xs transition-colors"
-                  >
-                    Remove
-                  </button>
-               </div>
-            </div>
-          </div>
+            <InventoryCard key={card.id} card={card} onDelete={onDelete} />
         ))}
       </div>
       

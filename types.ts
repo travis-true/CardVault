@@ -48,6 +48,7 @@ export interface Card {
   condition?: RawCondition;
   estimated_value: number;
   image_url: string; // Base64 or URL
+  image_url_back?: string; // Base64 or URL for the back
   notes: string;
   date_added: string;
 }
